@@ -236,22 +236,28 @@
 
       // Create the Diagram's Model:
       window.nodeDataArray = [
-        // { key: 1, text: "hi, how can we help you?", color: "#f0ad4e" },
-        // { key: 2, text: "need technical support", color: "#5cb85c" },
-        // { key: 3, text: "want to buy", color: "#5cb85c" },
-        // { key: 4, text: "what is your email?", color: "#f0ad4e" },
-        // { key: 5, text: "what do you want to buy?", color: "#f0ad4e" },
-        // { key: 6, text: "computers", color: "#5cb85c" },
-        // { key: 7, text: "laptops", color: "#5cb85c" },
+        // { key: 1, text: "hi, how can we help you?", type: "question", color: "#f0ad4e" },
+        // { key: 2, text: "need technical support", type: "answer", color: "#5cb85c" },
+        // { key: 3, text: "want to buy", type: "answer", color: "#5cb85c" },
+        // { key: 4, text: "what is your email?", type: "email", color: "#f0ad4e" },
+        // { key: 5, text: "what is your issue?", type: "free", color: "#f0ad4e" },
+        // { key: 6, text: "I will let you know", type: "free_answer", color: "#f0ad4e" },
+        // { key: 5, text: "what do you want to buy?", type:"question", color: "#f0ad4e" },
+        // { key: 6, text: "computers", type:"answer", color: "#5cb85c" },
+        // { key: 7, text: "laptops", type:"answer", color: "#5cb85c" },
+        // { key: 8, text: "got it, what is your issues?", type:"question", color: "#5cb85c" },
       ];
 
       window.linkDataArray = [
         // { from: 1, to: 2 },
         // { from: 1, to: 3 },
         // { from: 2, to: 4 },
+        // { from: 4, to: 5 },
+        // { from: 5, to: 6 },
         // { from: 3, to: 5 },
         // { from: 5, to: 6 },
         // { from: 5, to: 7 }
+        // { from: 4, to: 8 }
       ];
       myDiagram.model = new go.GraphLinksModel(window.nodeDataArray, window.linkDataArray);
     }
@@ -282,6 +288,12 @@
       <button type="button" id="add_answer" class="btn btn-primary" style="margin-bottom:10px;">
         Add Answer
       </button>
+      <button type="button" id="add_email" class="btn btn-primary" style="margin-bottom:10px;">
+        Add Email Node
+      </button>
+      <button type="button" id="add_free_node" class="btn btn-primary" style="margin-bottom:10px;">
+        Add Free Node
+      </button>
       <button type="button" id="get_links" class="btn btn-success">
         Get Code
       </button>
@@ -304,16 +316,37 @@
       localStorage.setItem('code_generated', JSON.stringify(_code));
       location.href = 'render.html';
     });
-    
+
     function makeCode(prev_index, index) {
       var _links = links.filter(x => x.from == index);
       if (_links.length == 0) {
+        if (prev_index > 0) {
+          if ((_code[prev_index].type == 'email' || _code[prev_index].type == 'free')) {
+            _code[index] = {
+              says: [elements.find(x => x.key == index).text],
+              reply: [],
+              slink: [],
+              type: elements.find(x => x.key == index).type,
+            };
+          }
+        } else {
+          _code[index] = {
+            says: _code['ice'].says,
+            reply: _code['ice'].reply,
+            slink: [],
+            type: _code['ice'].type,
+          };
+        }
+
         return;
       }
+
       if (index == 1) {
         _code['ice'] = {
           says: [elements.find(x => x.key == index).text],
-          reply: []
+          reply: [],
+          slink: [],
+          type: elements.find(x => x.key == index).type,
         };
         let reply = [];
         _links.forEach(_link => {
@@ -326,29 +359,38 @@
         _links.forEach(_link => {
           makeCode(-1, _link.to);
         });
-        
-      } else {
 
+      } else {
         let reply = [];
+        let _global_slink = null;
         _links.forEach(_link => {
           _reply_item = {};
           _reply_item['question'] = elements.find(x => x.key == _link.to).text;
           _reply_item['answer'] = _link.to;
+          _global_slink = _link.from;
           reply.push(_reply_item);
         });
-        if(prev_index > 1){
-          _code[prev_index].reply = reply;
+        if (prev_index > 1) {
+          if (_code[prev_index].type == 'email') {
+            _code[prev_index].slink = _global_slink;
+          } else if (_code[prev_index].type == 'free') {
+            _code[prev_index].slink = _global_slink;
+          } else {
+            _code[prev_index].reply = reply;
+          }
         }
-        
+
         _links.forEach(_link => {
           var key_idx = _link.from;
-          if(!_code[key_idx]){
+          if (!_code[key_idx]) {
             _code[key_idx] = {
               says: [elements.find(x => x.key == _link.to).text],
-              reply: []
+              reply: [],
+              slink: [],
+              type: elements.find(x => x.key == _link.to).type,
             };
           }
-          
+
           makeCode(_link.from, _link.to);
         });
       }
@@ -374,6 +416,28 @@
       myDiagram.model = new go.GraphLinksModel(window.nodeDataArray, window.linkDataArray);
       removeContent();
     });
+    $('#add_email').on('click', function () {
+      if ($('#content').val() == '') {
+        alert('Input question');
+        return;
+      }
+      let node = { key: parseInt(window.nodeDataArray.length + 1), text: $('#content').val(), color: "#f0ad4e", type: 'email' };
+      window.nodeDataArray.push(node);
+      myDiagram.model = new go.GraphLinksModel(window.nodeDataArray, window.linkDataArray);
+      removeContent();
+    });
+    $('#add_free_node').on('click', function () {
+      if ($('#content').val() == '') {
+        alert('Input question');
+        return;
+      }
+      let node = { key: parseInt(window.nodeDataArray.length + 1), text: $('#content').val(), color: "#f0ad4e", type: 'free' };
+      window.nodeDataArray.push(node);
+      myDiagram.model = new go.GraphLinksModel(window.nodeDataArray, window.linkDataArray);
+      removeContent();
+    });
+
+
     function removeContent() {
       $('#content').val('');
     }

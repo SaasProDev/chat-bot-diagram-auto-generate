@@ -260,6 +260,106 @@
         // { from: 4, to: 8 }
       ];
       myDiagram.model = new go.GraphLinksModel(window.nodeDataArray, window.linkDataArray);
+
+      let linked_question_count = [];
+
+      myDiagram.addModelChangedListener(function (evt) {
+        // ignore unimportant Transaction events
+        if (!evt.isTransactionFinished) return;
+        console.log(evt);
+
+        var txn = evt.object;  // a Transaction
+        if (txn === null) return;
+        // iterate over all of the actual ChangedEvents of the Transaction
+        txn.changes.each(function (e) {
+          // record node insertions and removals
+          if (e.change === go.ChangedEvent.Property) {
+            if (e.modelChange === "linkFromKey") {
+              console.log(evt.propertyName + " changed From key of link: " +
+                e.object + " from: " + e.oldValue + " to: " + e.newValue);
+            } else if (e.modelChange === "linkToKey") {
+              console.log(evt.propertyName + " changed To key of link: " +
+                e.object + " from: " + e.oldValue + " to: " + e.newValue);
+            }
+          } else if (e.change === go.ChangedEvent.Insert && e.modelChange === "linkDataArray") {
+            console.log(evt.propertyName + " added link: ");
+            console.log(e.newValue);
+            if(window.nodeDataArray.length == 0){
+              return;
+            }
+            let linked_node = window.nodeDataArray.find(x => x.key == e.newValue.to);
+            console.log(linked_node);
+            if(linked_node){
+              if(linked_node.type == 'question'){
+                if(!linked_question_count[e.newValue.to]){
+                  linked_question_count[e.newValue.to] = {
+                    count : 0
+                  }
+                }
+                
+                linked_question_count[e.newValue.to].count++;
+                console.log(linked_question_count);
+                if(linked_question_count[e.newValue.to].count >= 2){
+                  alert('you can not make two answers to one questions!. please remove one!');
+                }
+              }
+
+              if(linked_node.type == 'answer'){
+                let from_node = window.nodeDataArray.find(x => x.key == e.newValue.from);
+                if(from_node){
+                  if(from_node.type == 'answer'){
+                    alert('you can not make from answer to answer!. please fix!');
+                  }
+                }
+              }
+
+              if(linked_node.type == 'question'){
+                let from_node = window.nodeDataArray.find(x => x.key == e.newValue.from);
+                if(from_node){
+                  if(from_node.type == 'question'){
+                    alert('you can not make from question to question!. please fix!');
+                  }
+                }
+              }
+
+
+              if(linked_node.type == 'email'){
+                let from_node = window.nodeDataArray.find(x => x.key == e.newValue.from);
+                if(from_node){
+                  if(from_node.type != 'answer'){
+                    alert('you need to make from answer to email node!. please fix!');
+                  }
+                }
+              }
+
+              if(linked_node.type == 'free'){
+                let from_node = window.nodeDataArray.find(x => x.key == e.newValue.from);
+                if(from_node){
+                  if(from_node.type != 'email'){
+                    alert('you need to make from email node to free node!. please fix!');
+                  }
+                }
+              }
+            }
+          } else if (e.change === go.ChangedEvent.Remove && e.modelChange === "linkDataArray") {
+            console.log(evt.propertyName + " removed link: ");
+
+            console.log(e.oldValue);
+
+            if(window.nodeDataArray.length == 0){
+              return;
+            }
+            let linked_node = window.nodeDataArray.find(x => x.key == e.oldValue.to);
+            console.log(linked_node);
+            if(linked_node){
+              if(linked_node.type == 'question'){
+                linked_question_count[e.oldValue.to].count--;
+                console.log(linked_question_count);
+              }
+            }
+          }
+        });
+      });
     }
   </script>
 </head>
@@ -308,14 +408,22 @@
     var elements = null;
     var links = null;
     let _code = {};
+    let error = false;
     $('#get_links').on('click', function () {
       elements = window.diagram.model.Cc;
       console.log(elements);
       links = window.diagram.model.Oc;
       makeCode(0, 1);
       localStorage.setItem('code_generated', JSON.stringify(_code));
-      location.href = 'render.html';
+      if(error){
+        alert('could not generate chat bot!');
+        error = false;
+      } else {
+        location.href = 'render.html';
+      }
+      
     });
+
 
     function makeCode(prev_index, index) {
       var _links = links.filter(x => x.from == index);
@@ -342,6 +450,12 @@
       }
 
       if (index == 1) {
+
+        if(elements.find(x => x.key == index).type == 'email' || elements.find(x => x.key == index).type == 'free'){
+          alert('first root should not be email node or free node');
+          error = true;
+          return;
+        }
         _code['ice'] = {
           says: [elements.find(x => x.key == index).text],
           reply: [],
@@ -357,7 +471,7 @@
         });
         _code['ice'].reply = reply;
         _links.forEach(_link => {
-          makeCode(-1, _link.to);
+          makeCode(0, _link.to);
         });
 
       } else {
